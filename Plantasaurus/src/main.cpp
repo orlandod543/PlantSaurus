@@ -3,7 +3,7 @@
 #include <Conf.h>
 #include <MoistureSensor.h>
 #include <DS1820.h>
-#include <ds1307.h>
+#include <RTClock.h>
 #include <string>
 /*
 Program that reads moisture data, temperature, timestamp it and in a future expansion send it through WIFI
@@ -31,30 +31,11 @@ void TickerInit(void){
 //Initiializing objects
 MoistureSensor Sensor(MOISTUREPIN, DRYCAL, WETCAL); //moisture sensor object
 DS1820  probe(TEMPERATUREPIN); //Temperature sensor using onewire
-DS1307 rtc(SDAPIN,SLCPIN); // create a clock object
+RTClock clk(SDAPIN,SLCPIN); // create a clock object
 
-/*Start of RTC related functions */
-/*
-Fills a char array with the current date in the current format:
-yyyy-mm-dd-hh:mm:ss
-Returns 0 if rtc is found
-Returns 1 if fails
-*/
-char datestr[20];
-int getdatestr(char *datestr){
-    int sec,mins,hour,day,date,month,year; //integer array to hold the date: sec,min,hour,day,date,month,year);
-    if(!rtc.gettime(&sec,&mins,&hour,&day,&date,&month,&year)){
-        sprintf(datestr,"%d-%d-%d-%02d:%02d:%02d",year,month,date,hour,mins,sec);
-        return 0;
-    }
-    else{
-        return 1;
-    }
-}    
-/*END of RTC related functions */
 
 float  value,temperature;    
-
+char datestr[20];
 int main() {
     
     /*Configure serial port and ticker*/
@@ -62,31 +43,7 @@ int main() {
     TickerInit();
 /*configure the date from RTC*/
 #ifdef SETRTC
-    int sec,mins,hour,day,date,month,year; //integer array to hold the date: sec,min,hour,day,date,month,year);
-    if(SETRTC == true){
-        pc.printf("Setting date to \r\n");
-        sec  = 20;
-        mins = 48;
-        hour = 22;
-        day = 1;
-        date = 26;
-        month = 05;
-        year = 19;
-        pc.printf("%d-",sec);
-        pc.printf("%d-",mins);
-        pc.printf("%d-",hour);
-        pc.printf("%d-",day);  
-        pc.printf("%d-",date);
-        pc.printf("%d-",month); 
-        pc.printf("%d\r\n",year); 
-     if(!rtc.settime(sec,mins,hour,day,date,month,year)){
-        pc.printf("Date changed successfully\r\n");
-        pc.printf(getdatestr());        
-        }
-        else{
-            pc.printf("Unable to initialize RTC\r\n");
-        } 
-    }
+    clk.SetRTClock;
 #endif  
 
     /*check DS1820 available*/
@@ -100,16 +57,26 @@ int main() {
 
     /*Start endless loop*/
     while(1){
+        /*Waits until SampleFlag from ticker is set to acquire date*/
         if(SampleFlag== true){  
             SampleFlag = false;
-            probe.startConversion();
+            
             //check is there are received data from ESP
             
-            /*Timestamp values and create message*/
-                    
+           /*Get sensors data*/
+            probe.startConversion();
             value = Sensor.getMoisture();    
             temperature = probe.read();
-            getdatestr(datestr);
+
+            /*Get date in string*/
+            if(!clk.ReadDate()){
+              clk.GetDatestr(datestr);
+            }
+            else{
+              pc.printf("RTC clock disconnected\r\n");
+            }
+
+            /*Send data to terminal*/
             pc.printf("%s %1.2f %1.2f\r\n", datestr, value, temperature);
              
         }

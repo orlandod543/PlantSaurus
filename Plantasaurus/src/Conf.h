@@ -10,7 +10,7 @@
 
 #define TEMPERATUREPIN A1
 
-#define SAMPLINGTIME 10
+#define SAMPLINGTIME 1
 
 #define SERIALBAUD 115200
 /*RTC configuration  */
