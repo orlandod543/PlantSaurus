@@ -1,115 +1,139 @@
-/*
-Program that reads moisture data, temperature, timestamp it and in a future expansion send it through WIFI
-*/
+/*******************************************************************************
+ * Copyright (c) 2014, 2015 IBM Corp.
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * and Eclipse Distribution License v1.0 which accompany this distribution.
+ *
+ * The Eclipse Public License is available at
+ *    http://www.eclipse.org/legal/epl-v10.html
+ * and the Eclipse Distribution License is available at
+ *   http://www.eclipse.org/org/documents/edl-v10.php.
+ *
+ * Contributors:
+ *    Ian Craggs - initial API and implementation and/or initial documentation
+ *    Ian Craggs - make sure QoS2 processing works, and add device headers
+ *******************************************************************************/
+ 
+ /**
+  This is a sample program to illustrate the use of the MQTT Client library
+  on the mbed platform.  The Client class requires two classes which mediate
+  access to system interfaces for networking and timing.  As long as these two
+  classes provide the required public programming interfaces, it does not matter
+  what facilities they use underneath. In this program, they use the mbed
+  system libraries.
+ 
+ */
+ 
+ // change this to 1 to output messages to LCD instead of serial
+ 
+#define MQTTCLIENT_QOS2 1
+ 
+#include "MQTTNetwork.h"
+#include "MQTTmbed.h"
+#include "MQTTClient.h"
+#include "Conf.h"
+#include "TCPSocket.h"
 
-#include "mbed.h"
-#include <Conf.h>
-#include <MoistureSensor.h>
-#include <DS1820.h>
-#include <RTClock.h>
-#include <Ticker.h>
-#include "ESP8266Interface.h"
-#include "UDPSocket.h"
-#include "Buzzer.h"
-
-/*Initializing peripherals and sensors*/
-Serial pc(USBTX, USBRX);
-
-
-/* End of Ticker related functions*/  
-
-float  value,temperature;    
-char datestr[20];
-const int payloadsize = 64;
-char payload[payloadsize];
-bool WIFIConnected = false; //boolean that indicates if the connection to the wifi network is succesful.  
-int main()
+int arrivedcount = 0;
+ 
+ 
+void messageArrived(MQTT::MessageData& md)
 {
-    /*Configure serial port and ticker*/
-    pc.baud(SERIALBAUD);
-    TickerInit();
+    MQTT::Message &message = md.message;
+    logMessage("Message arrived: qos %d, retained %d, dup %d, packetid %d\r\n", message.qos, message.retained, message.dup, message.id);
+    logMessage("Payload %.*s\r\n", message.payloadlen, (char*)message.payload);
+    ++arrivedcount;
+}
+ 
+ESP8266Interface esp(ESP8266_TX, ESP8266_RX); //create a wifi connection
+WiFiInterface *wifi = &esp; //create a wifi interface with the ESP8266
 
-    //Initializing objects
-    MoistureSensor Sensor(MOISTUREPIN, DRYCAL, WETCAL); //moisture sensor object
-    DS1820  probe(TEMPERATUREPIN); //Temperature sensor using onewire
-    RTClock clk(SDAPIN,SLCPIN); // create a clock object
-    Buzzer alarm(BuzzerPIN);
-    ESP8266Interface esp(ESP8266_TX, ESP8266_RX); //create a wifi connection
-    WiFiInterface *wifi = &esp; //create a wifi interface with the ESP8266
-    UDPSocket socket;   
-
-    
-    alarm.beep(392,0.3); //send a tone to show its alive
-
-    /*Establishing network connection*/
+int main(int argc, char* argv[])
+{
+    /*Connect to wifi before handing the interface to MQTT*/ 
     pc.printf("Attempting to connect to %s:\r\n", SSIDName);
     nsapi_error_t status = wifi->connect(SSIDName, SSIDPassword, SSIDSecurity);
-
-    if(status!=NSAPI_ERROR_OK){
-        pc.printf("Connection failed with status %i. Disable WIFI", status);
-        WIFIConnected = false;
-        //two same tones indicates no conection. 
-        alarm.beep(392,0.3); //send a tone to indicate connection
-        wait(0.5);
-        alarm.beep(392,0.3); //send a tone to indicate connectio
+    if (!status){
+        pc.printf("Connection failed. Stop");
+        return -1;
     }else{
-        //if everything is ok then print the ip address and create udp socket.
-        pc.printf("Connection successful\r\n");
-        const char *ip = wifi->get_ip_address();
-        const char *mac = wifi->get_mac_address();
-        pc.printf("IP address is: %s\r\n", ip ? ip : "No IP");
-        pc.printf("MAC address is: %s\r\n", mac ? mac : "No MAC");
-        WIFIConnected = true;
-        socket.open(wifi); 
-        // two different tones indicate connection
-        alarm.beep(392,0.3); //send a tone to indicate connection
-        wait(0.5);
-        alarm.beep(783.99,0.3); //send a tone to indicate connectio
-           
+        pc.printf("connection succesful. IP %s", wifi -> get_ip_address());
     }
 
-    /*check DS1820 available*/
-        probe.begin();
-    if(!probe.isPresent()){
-        pc.printf("No DS1820 found\r\n");
+    float version = 0.6;
+    char* topic = "mbed-sample";
+ 
+    logMessage("HelloMQTT: version is %.2f\r\n", version);
+ 
+    // I am not sure if this part is needed. 
+    NetworkInterface* network = wifi;
+    if (!network) {
+        return -1;
     }
-    else{
-        pc.printf("A DS1820 found\r\n");
-        }
-
-    /*Start endless loop*/
-    while(1){
-        /*Waits until SampleFlag from ticker is set to acquire date*/
-        if(SampleFlag== true){  
-            SampleFlag = false;
-            
-           /*Get sensors data*/
-            probe.startConversion();
-            value = Sensor.getMoisture();    
-            temperature = probe.read();
-
-            /*Get date in string*/
-            if(!clk.ReadDate()){
-              clk.GetDatestr(datestr);
-            }
-            else{
-              pc.printf("RTC clock disconnected\r\n");
-            }
-
-            //assemble data into a payload
-            sprintf(payload,"%s %1.2f %1.2f\r\n", datestr, value, temperature);
-
-            /*Send data to terminal*/
-            pc.printf(payload);
-
-            /*send data to the UDP port*/
-            if(WIFIConnected)
-                socket.sendto(TARDISIP, TARDISPORT,&payload, payloadsize);
-
-             
-        }
-    }
-        
+ 
+    MQTTNetwork mqttNetwork(network);
+ 
+    MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
+ 
+    const char* hostname = "m2m.eclipse.org";
+    int port = 1883;
+    logMessage("Connecting to %s:%d\r\n", hostname, port);
+    int rc = mqttNetwork.connect(hostname, port);
+    if (rc != 0)
+        logMessage("rc from TCP connect is %d\r\n", rc);
+ 
+    MQTTPacket_connectData data = MQTTPacket_connectData_initializer;
+    data.MQTTVersion = 3;
+    data.clientID.cstring = "mbed-sample";
+    data.username.cstring = "testuser";
+    data.password.cstring = "testpassword";
+    if ((rc = client.connect(data)) != 0)
+        logMessage("rc from MQTT connect is %d\r\n", rc);
+ 
+    if ((rc = client.subscribe(topic, MQTT::QOS2, messageArrived)) != 0)
+        logMessage("rc from MQTT subscribe is %d\r\n", rc);
+ 
+    MQTT::Message message;
+ 
+    // QoS 0
+    char buf[100];
+    sprintf(buf, "Hello World!  QoS 0 message from app version %f\r\n", version);
+    message.qos = MQTT::QOS0;
+    message.retained = false;
+    message.dup = false;
+    message.payload = (void*)buf;
+    message.payloadlen = strlen(buf)+1;
+    rc = client.publish(topic, message);
+    while (arrivedcount < 1)
+        client.yield(100);
+ 
+    // QoS 1
+    sprintf(buf, "Hello World!  QoS 1 message from app version %f\r\n", version);
+    message.qos = MQTT::QOS1;
+    message.payloadlen = strlen(buf)+1;
+    rc = client.publish(topic, message);
+    while (arrivedcount < 2)
+        client.yield(100);
+ 
+    // QoS 2
+    sprintf(buf, "Hello World!  QoS 2 message from app version %f\r\n", version);
+    message.qos = MQTT::QOS2;
+    message.payloadlen = strlen(buf)+1;
+    rc = client.publish(topic, message);
+    while (arrivedcount < 3)
+        client.yield(100);
+ 
+    if ((rc = client.unsubscribe(topic)) != 0)
+        logMessage("rc from unsubscribe was %d\r\n", rc);
+ 
+    if ((rc = client.disconnect()) != 0)
+        logMessage("rc from disconnect was %d\r\n", rc);
+ 
+    mqttNetwork.disconnect();
+ 
+    logMessage("Version %.2f: finish %d msgs\r\n", version, arrivedcount);
+ 
+    return 0;
 }
-
-
+ 
