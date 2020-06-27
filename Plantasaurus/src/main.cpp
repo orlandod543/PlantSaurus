@@ -20,7 +20,7 @@ Serial pc(USBTX, USBRX);
 
 float  moisture,temperature;    
 char datestr[20];
-const int payloadsize = 64;
+const int payloadsize = 32;
 char payload[payloadsize];
 bool WIFIConnected = false; //boolean that indicates if the connection to the wifi network is succesful.  
 int main()
@@ -97,7 +97,7 @@ int main()
             }
 
             //assemble data into a payload
-            sprintf(payload,"%s %1.2f %1.2f\r\n", datestr, moisture, temperature);
+            sprintf(payload,"%s %1.2f %1.2f\n", datestr, moisture, temperature);
 
             /*Send data to terminal*/
             pc.printf(payload);
