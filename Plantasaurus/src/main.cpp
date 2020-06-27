@@ -33,6 +33,7 @@
 #include "MQTTmbed.h"
 #include "MQTTClient.h"
 #include "Conf.h"
+#include "ESP8266Interface.h"
 #include "TCPSocket.h"
 
 int arrivedcount = 0;
