@@ -11,10 +11,11 @@
 #define MOISTUREPIN A0
 #define DRYCAL 7864
 #define WETCAL 43908
+#define DRYALARM 0.3
 
 #define TEMPERATUREPIN A1
 
-#define SAMPLINGTIME 1
+#define SAMPLINGTIME 5
 
 #define SERIALBAUD 115200
 /*RTC configuration  */
