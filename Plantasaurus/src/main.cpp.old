@@ -1,0 +1,159 @@
+#include "mbed.h"
+#include <Conf.h>
+#include <MoistureSensor.h>
+#include <DS1820.h>
+#include <ESP8266.h>
+#include <RTClock.h>
+WiFiInterface *wifi;
+/*
+Program that reads moisture data, temperature, timestamp it and in a future expansion send it through WIFI
+*/
+/*Initializing peripherals and sensors*/
+Serial pc(USBTX, USBRX);
+
+/* Start of Ticker related functions*/  
+/*The ticker is controller by SAMPLINGTIME which is defined in seconds*/
+Ticker To1; 
+char data[50];
+volatile bool SampleFlag= false; 
+DigitalOut led(LED1); 
+ 
+void TickerISRHandler(void){
+    SampleFlag = true;
+    led = !led; 
+    }
+void TickerInit(void){
+    To1.attach(&TickerISRHandler,SAMPLINGTIME);
+    }
+/* End of Ticker related functions*/     
+
+    
+//Initiializing objects
+MoistureSensor Sensor(MOISTUREPIN, DRYCAL, WETCAL); //moisture sensor object
+DS1820  probe(TEMPERATUREPIN); //Temperature sensor using onewire
+RTClock clk(SDAPIN,SLCPIN); // create a clock object
+ESP8266 esp(ESP8266_TX, ESP8266_RX, ESP8266_BAUD); //Create WIFI object
+
+ /*Start of ESP8266*/
+ char snd[255], rcv[1000]; // Strings for sending and receiving commands / data / replies
+void ESPConnect(void){
+    pc.printf("Reset ESP\r\n");
+    esp.Reset();
+    esp.RcvReply(rcv, 400);
+    pc.printf("%s", rcv);
+    wait(2);
+    pc.printf("Sending AT\r\n");
+    strcpy(snd, "AT");
+    esp.SendCMD(snd);
+    esp.RcvReply(rcv, 400);
+    pc.printf("%s", rcv);
+    wait(2);
+    pc.printf("Set mode to AP\r\n");
+    esp.SetMode(1);
+    esp.RcvReply(rcv, 1000);
+    pc.printf("%s", rcv);
+    
+    pc.printf("Receiving Wifi List\r\n");
+    esp.GetList(rcv);
+    pc.printf("%s", rcv);
+    
+    pc.printf("Connecting to AP\r\n");
+    esp.Join(SSIDName, SSIDPasswd); // Replace MyAP and MyPasswd with your SSID and password
+    esp.RcvReply(rcv, 1000);
+    pc.printf("%s", rcv);
+    wait(8);
+    pc.printf("Getting IP\r\n");
+    esp.GetIP(rcv);
+    pc.printf("%s", rcv);
+    pc.printf("Setting multiple connections\r\n");
+    esp.SetMultiple();
+    esp.RcvReply(rcv, 1000);
+    pc.printf("%s", rcv);
+    pc.printf("Getting Connection Status\r\n");
+    esp.GetConnStatus(rcv);
+    pc.printf("%s", rcv);
+    pc.printf("Start server mode on port 80\r\n");
+    esp.StartServerMode(80);
+    esp.RcvReply(rcv, 1000);
+    pc.printf("%s", rcv);
+    wait(4);
+    //pc.printf("Close server mode\r\n");
+    //esp.CloseServerMode();
+    //esp.RcvReply(rcv, 1000);
+    //pc.printf("THE END");   
+    }
+    
+char payload[30];
+void WIFISend(void){
+    pc.printf("Sending to WIFI\r\n");
+    sprintf(snd,"AT+CIPSEND=0,30");
+    esp.SendCMD(snd);
+//    pc.printf(snd);
+    wait(1.0f);
+    esp.RcvReply(rcv, 1000);  
+//   pc.printf("%s\r\n", rcv); 
+    sprintf(snd,payload); //Post values to thingspeak
+    //pc.printf("%s",snd);
+    esp.SendCMD(snd);
+    wait(2.0f);
+    esp.RcvReply(rcv, 1000);    
+    pc.printf("%s", rcv);
+  }
+ /*End of ESP8266*/
+
+
+
+float  value,temperature;    
+char datestr[20];
+int main() {
+
+    /*Configure serial port and ticker*/
+    pc.baud(SERIALBAUD);
+    TickerInit();
+/*configure the date from RTC*/
+#ifdef SETRTC
+    clk.SetRTClock;
+#endif  
+
+    /*Connect to ESP8266*/
+    ESPConnect();
+
+    /*check DS1820 available*/
+        probe.begin();
+    if(!probe.isPresent()){
+        pc.printf("No DS1820 found\r\n");
+    }
+    else{
+        pc.printf("A DS1820 found\r\n");
+        }
+
+    /*Start endless loop*/
+    while(1){
+        /*Waits until SampleFlag from ticker is set to acquire date*/
+        if(SampleFlag== true){  
+            SampleFlag = false;
+            
+            //check is there are received data from ESP
+            
+           /*Get sensors data*/
+            probe.startConversion();
+            value = Sensor.getMoisture();    
+            temperature = probe.read();
+
+            /*Get date in string*/
+            if(!clk.ReadDate()){
+              clk.GetDatestr(datestr);
+            }
+            else{
+              pc.printf("RTC clock disconnected\r\n");
+            }
+            sprintf(payload,"%s %1.2f %1.2f\r\n", datestr, value, temperature);
+            /*Send data to terminal*/
+            pc.printf("%s %1.2f %1.2f\r\n", datestr, value, temperature);
+            WIFISend();
+        }
+    }
+        
+}
+
+

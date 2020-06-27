@@ -16,6 +16,15 @@
 /*RTC configuration  */
 #define SDAPIN D2
 #define SLCPIN D8
+
+/*ESP8266 configuration*/
+#define ESP8266_TX D14
+#define ESP8266_RX D15
+#define ESP8266_BAUD 115200
 //#define SETRTC true
 
+#define MBED_CONF_APP_WIFI_SSID "Koraalstraat28A"
+#define MBED_CONF_APP_WIFI_PASSWORD "Nami_488"
+#define MBED_CONF_ESP8266_TX D14
+#define MBED_CONF_ESP8266_RX D15
 #endif
