@@ -25,8 +25,13 @@
 #define ESP8266_TX D14
 #define ESP8266_RX D15
 #define ESP8266_BAUD 115200
+
 //#define SETRTC true
 
+/*Buzzer configuration*/
+#define BuzzerPIN D7
+
+/*esp configuration*/
 #define MBED_CONF_APP_WIFI_SSID SSIDName
 #define MBED_CONF_APP_WIFI_PASSWORD SSIDPasswd
 #define MBED_CONF_ESP8266_TX D14
