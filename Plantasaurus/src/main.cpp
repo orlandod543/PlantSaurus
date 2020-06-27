@@ -38,34 +38,40 @@
 
 int arrivedcount = 0;
  
+Serial pc(USBTX, USBRX);
  
 void messageArrived(MQTT::MessageData& md)
 {
     MQTT::Message &message = md.message;
-    logMessage("Message arrived: qos %d, retained %d, dup %d, packetid %d\r\n", message.qos, message.retained, message.dup, message.id);
-    logMessage("Payload %.*s\r\n", message.payloadlen, (char*)message.payload);
+    pc.printf("Message arrived: qos %d, retained %d, dup %d, packetid %d\r\n", message.qos, message.retained, message.dup, message.id);
+    pc.printf("Payload: %.*s\r\n", message.payloadlen, (char*)message.payload);
     ++arrivedcount;
 }
  
 ESP8266Interface esp(ESP8266_TX, ESP8266_RX); //create a wifi connection
 WiFiInterface *wifi = &esp; //create a wifi interface with the ESP8266
 
+
+    
+
 int main(int argc, char* argv[])
 {
+    pc.baud(SERIALBAUD);
     /*Connect to wifi before handing the interface to MQTT*/ 
     pc.printf("Attempting to connect to %s:\r\n", SSIDName);
     nsapi_error_t status = wifi->connect(SSIDName, SSIDPassword, SSIDSecurity);
-    if (!status){
+    pc.printf("%i", status);
+    if (status){
         pc.printf("Connection failed. Stop");
         return -1;
     }else{
-        pc.printf("connection succesful. IP %s", wifi -> get_ip_address());
+        pc.printf("connection succesful. IP %s\n", wifi -> get_ip_address());
     }
 
     float version = 0.6;
     char* topic = "mbed-sample";
  
-    logMessage("HelloMQTT: version is %.2f\r\n", version);
+    pc.printf("HelloMQTT: version is %.2f\r\n", version);
  
     // I am not sure if this part is needed. 
     NetworkInterface* network = wifi;
@@ -77,24 +83,33 @@ int main(int argc, char* argv[])
  
     MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
  
-    const char* hostname = "m2m.eclipse.org";
+    //creates a TCP connection with the server. TCPSocket is wrapped on mqttNetwork
+    const char* hostname = "broker.hivemq.com";
     int port = 1883;
-    logMessage("Connecting to %s:%d\r\n", hostname, port);
+    pc.printf("Connecting to %s:%d\r\n", hostname, port);
     int rc = mqttNetwork.connect(hostname, port);
     if (rc != 0)
-        logMessage("rc from TCP connect is %d\r\n", rc);
- 
+        pc.printf("rc from TCP connect is %d\r\n", rc);
+    else{
+        pc.printf("Connection to %s:%d successful\r\n",hostname,port);
+    }
+
     MQTTPacket_connectData data = MQTTPacket_connectData_initializer;
     data.MQTTVersion = 3;
     data.clientID.cstring = "mbed-sample";
     data.username.cstring = "testuser";
     data.password.cstring = "testpassword";
     if ((rc = client.connect(data)) != 0)
-        logMessage("rc from MQTT connect is %d\r\n", rc);
+        pc.printf("rc from MQTT connect is %d\r\n", rc);
+    else{
+        pc.printf("Connected to MQTT broker\r\n");
+    }
  
     if ((rc = client.subscribe(topic, MQTT::QOS2, messageArrived)) != 0)
-        logMessage("rc from MQTT subscribe is %d\r\n", rc);
- 
+        pc.printf("rc from MQTT subscribe is %d\r\n", rc);
+    else{
+        pc.printf("Subscribed to topic %s\r\n", topic);
+    }
     MQTT::Message message;
  
     // QoS 0
@@ -106,9 +121,10 @@ int main(int argc, char* argv[])
     message.payload = (void*)buf;
     message.payloadlen = strlen(buf)+1;
     rc = client.publish(topic, message);
+    pc.printf("%i", arrivedcount);
     while (arrivedcount < 1)
-        client.yield(100);
- 
+        client.yield(10);
+
     // QoS 1
     sprintf(buf, "Hello World!  QoS 1 message from app version %f\r\n", version);
     message.qos = MQTT::QOS1;
@@ -126,14 +142,14 @@ int main(int argc, char* argv[])
         client.yield(100);
  
     if ((rc = client.unsubscribe(topic)) != 0)
-        logMessage("rc from unsubscribe was %d\r\n", rc);
+        pc.printf("rc from unsubscribe was %d\r\n", rc);
  
     if ((rc = client.disconnect()) != 0)
-        logMessage("rc from disconnect was %d\r\n", rc);
+        pc.printf("rc from disconnect was %d\r\n", rc);
  
     mqttNetwork.disconnect();
  
-    logMessage("Version %.2f: finish %d msgs\r\n", version, arrivedcount);
+    pc.printf("Version %.2f: finish %d msgs\r\n", version, arrivedcount);
  
     return 0;
 }
