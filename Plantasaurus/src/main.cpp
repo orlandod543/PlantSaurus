@@ -21,42 +21,38 @@ float  value,temperature;
 char datestr[20];
 const int payloadsize = 64;
 char payload[payloadsize];
-
+bool WIFIConnected = false; //boolean that indicates if the connection to the wifi network is succesful.  
 int main()
 {
     /*Configure serial port and ticker*/
     pc.baud(SERIALBAUD);
     TickerInit();
 
-    /*configure the date from RTC*/
-    #ifdef SETRTC
-        clk.SetRTClock;
-    #endif  
-
-    //Initiializing objects
+    //Initializing objects
     MoistureSensor Sensor(MOISTUREPIN, DRYCAL, WETCAL); //moisture sensor object
     DS1820  probe(TEMPERATUREPIN); //Temperature sensor using onewire
     RTClock clk(SDAPIN,SLCPIN); // create a clock object
     ESP8266Interface esp(ESP8266_TX, ESP8266_RX); //create a wifi connection
-    WiFiInterface *wifi = &esp;
+    WiFiInterface *wifi = &esp; //create a wifi interface with the ESP8266
+    UDPSocket socket;   
 
-    /*Attemps to connect to the network*/
+    /*Establishing network connection*/
     pc.printf("Attempting to connect to %s:\r\n", SSIDName);
     nsapi_error_t status = wifi->connect(SSIDName, SSIDPassword, SSIDSecurity);
-    if(status!=NSAPI_ERROR_OK){
-        pc.printf("Connection failed with status %i. Stop", status);
-        return 0;
-        }
-    //if everything is ok then print the ip address. 
-    pc.printf("Connection successful\r\n");
-    const char *ip = wifi->get_ip_address();
-    const char *mac = wifi->get_mac_address();
-    pc.printf("IP address is: %s\r\n", ip ? ip : "No IP");
-    pc.printf("MAC address is: %s\r\n", mac ? mac : "No MAC");   
 
-    /*create a upd socket*/
-    UDPSocket socket;
-    socket.open(wifi);
+    if(status!=NSAPI_ERROR_OK){
+        pc.printf("Connection failed with status %i. Disable WIFI", status);
+        WIFIConnected = false;
+    }else{
+        //if everything is ok then print the ip address and create udp socket.
+        pc.printf("Connection successful\r\n");
+        const char *ip = wifi->get_ip_address();
+        const char *mac = wifi->get_mac_address();
+        pc.printf("IP address is: %s\r\n", ip ? ip : "No IP");
+        pc.printf("MAC address is: %s\r\n", mac ? mac : "No MAC");
+        WIFIConnected = true;
+        socket.open(wifi);     
+    }
 
     /*check DS1820 available*/
         probe.begin();
@@ -72,8 +68,6 @@ int main()
         /*Waits until SampleFlag from ticker is set to acquire date*/
         if(SampleFlag== true){  
             SampleFlag = false;
-            
-            //check is there are received data from ESP
             
            /*Get sensors data*/
             probe.startConversion();
@@ -95,7 +89,8 @@ int main()
             pc.printf(payload);
 
             /*send data to the UDP port*/
-            socket.sendto(TARDISIP, TARDISPORT,&payload, payloadsize);
+            if(WIFIConnected)
+                socket.sendto(TARDISIP, TARDISPORT,&payload, payloadsize);
 
              
         }
