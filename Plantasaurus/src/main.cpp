@@ -1,13 +1,16 @@
-#include "mbed.h"
+/*
+Program that reads moisture data, temperature, timestamp it and in a future expansion send it through WIFI
+*/
 
+#include "mbed.h"
 #include <Conf.h>
 #include <MoistureSensor.h>
 #include <DS1820.h>
 #include <RTClock.h>
 #include <string>
-/*
-Program that reads moisture data, temperature, timestamp it and in a future expansion send it through WIFI
-*/
+#include "ESP8266Interface.h"
+#include "UDPSocket.h"
+
 /*Initializing peripherals and sensors*/
 Serial pc(USBTX, USBRX);
 
@@ -32,12 +35,27 @@ void TickerInit(void){
 MoistureSensor Sensor(MOISTUREPIN, DRYCAL, WETCAL); //moisture sensor object
 DS1820  probe(TEMPERATUREPIN); //Temperature sensor using onewire
 RTClock clk(SDAPIN,SLCPIN); // create a clock object
-
+ESP8266Interface esp(ESP8266_TX, ESP8266_RX); //create a wifi connection
+WiFiInterface *wifi = &esp;
 
 float  value,temperature;    
 char datestr[20];
 int main() {
-    
+
+    /*Attemps to connect to the network*/
+    pc.printf("Attempting to connect to %s:\r\n", SSIDName);
+    nsapi_error_t status = wifi->connect(SSIDName, SSIDPassword, SSIDSecurity);
+    if(status!=NSAPI_ERROR_OK){
+        pc.printf("Connection failed with status %i. Stop", status);
+        return 0;
+    }
+    //if everything is ok then print the ip address. 
+    pc.printf("Connection successful\r\n");
+    const char *ip = wifi->get_ip_address();
+    const char *mac = wifi->get_mac_address();
+    pc.printf("IP address is: %s\r\n", ip ? ip : "No IP");
+    pc.printf("MAC address is: %s\r\n", mac ? mac : "No MAC");   
+
     /*Configure serial port and ticker*/
     pc.baud(SERIALBAUD);
     TickerInit();
