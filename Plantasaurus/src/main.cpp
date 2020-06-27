@@ -18,7 +18,7 @@ Serial pc(USBTX, USBRX);
 
 /* End of Ticker related functions*/  
 
-float  value,temperature;    
+float  moisture,temperature;    
 char datestr[20];
 const int payloadsize = 64;
 char payload[payloadsize];
@@ -85,7 +85,7 @@ int main()
             
            /*Get sensors data*/
             probe.startConversion();
-            value = Sensor.getMoisture();    
+            moisture = Sensor.getMoisture();    
             temperature = probe.read();
 
             /*Get date in string*/
@@ -97,7 +97,7 @@ int main()
             }
 
             //assemble data into a payload
-            sprintf(payload,"%s %1.2f %1.2f\r\n", datestr, value, temperature);
+            sprintf(payload,"%s %1.2f %1.2f\r\n", datestr, moisture, temperature);
 
             /*Send data to terminal*/
             pc.printf(payload);
@@ -106,6 +106,15 @@ int main()
             if(WIFIConnected)
                 socket.sendto(TARDISIP, TARDISPORT,&payload, payloadsize);
 
+            /*Alarm section*/
+            //if soil is below certain moisture value, send a tone to ask for water
+            if(moisture<DRYALARM){
+                alarm.beep(880,0.3); //send a tone to indicate connection
+                wait(0.5);
+                alarm.beep(880,0.3); //send a tone to indicate connectio
+                wait(0.5);
+                alarm.beep(880,0.3); //send a tone to indicate connectio             
+            }
              
         }
     }
