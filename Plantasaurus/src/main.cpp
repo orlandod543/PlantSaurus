@@ -10,6 +10,7 @@ Program that reads moisture data, temperature, timestamp it and in a future expa
 #include <Ticker.h>
 #include "ESP8266Interface.h"
 #include "UDPSocket.h"
+#include "Buzzer.h"
 
 /*Initializing peripherals and sensors*/
 Serial pc(USBTX, USBRX);
@@ -32,9 +33,13 @@ int main()
     MoistureSensor Sensor(MOISTUREPIN, DRYCAL, WETCAL); //moisture sensor object
     DS1820  probe(TEMPERATUREPIN); //Temperature sensor using onewire
     RTClock clk(SDAPIN,SLCPIN); // create a clock object
+    Buzzer alarm(BuzzerPIN);
     ESP8266Interface esp(ESP8266_TX, ESP8266_RX); //create a wifi connection
     WiFiInterface *wifi = &esp; //create a wifi interface with the ESP8266
     UDPSocket socket;   
+
+    
+    alarm.beep(392,0.3); //send a tone to show its alive
 
     /*Establishing network connection*/
     pc.printf("Attempting to connect to %s:\r\n", SSIDName);
@@ -43,6 +48,10 @@ int main()
     if(status!=NSAPI_ERROR_OK){
         pc.printf("Connection failed with status %i. Disable WIFI", status);
         WIFIConnected = false;
+        //two same tones indicates no conection. 
+        alarm.beep(392,0.3); //send a tone to indicate connection
+        wait(0.5);
+        alarm.beep(392,0.3); //send a tone to indicate connectio
     }else{
         //if everything is ok then print the ip address and create udp socket.
         pc.printf("Connection successful\r\n");
@@ -51,7 +60,12 @@ int main()
         pc.printf("IP address is: %s\r\n", ip ? ip : "No IP");
         pc.printf("MAC address is: %s\r\n", mac ? mac : "No MAC");
         WIFIConnected = true;
-        socket.open(wifi);     
+        socket.open(wifi); 
+        // two different tones indicate connection
+        alarm.beep(392,0.3); //send a tone to indicate connection
+        wait(0.5);
+        alarm.beep(783.99,0.3); //send a tone to indicate connectio
+           
     }
 
     /*check DS1820 available*/
