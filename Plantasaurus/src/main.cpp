@@ -7,27 +7,14 @@ Program that reads moisture data, temperature, timestamp it and in a future expa
 #include <MoistureSensor.h>
 #include <DS1820.h>
 #include <RTClock.h>
-#include <string>
+#include <Ticker.h>
 #include "ESP8266Interface.h"
 #include "UDPSocket.h"
 
 /*Initializing peripherals and sensors*/
 Serial pc(USBTX, USBRX);
 
-/* Start of Ticker related functions*/  
-/*The ticker is controller by SAMPLINGTIME which is defined in seconds*/
-Ticker To1; 
-char data[50];
-volatile bool SampleFlag= false; 
-DigitalOut led(LED1); 
- 
-void TickerISRHandler(void){
-    SampleFlag = true;
-    led = !led; 
-    }
-void TickerInit(void){
-    To1.attach(&TickerISRHandler,SAMPLINGTIME);
-    }
+
 /* End of Ticker related functions*/  
 
 float  value,temperature;    
