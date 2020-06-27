@@ -25,10 +25,6 @@
 #define ESP8266_TX D14
 #define ESP8266_RX D15
 #define ESP8266_BAUD 115200
-<<<<<<< HEAD
-
-=======
->>>>>>> wifi
 //#define SETRTC true
 
 #define MBED_CONF_APP_WIFI_SSID SSIDName
