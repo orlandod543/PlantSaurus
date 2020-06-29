@@ -12,17 +12,23 @@ Program that reads moisture data, temperature, timestamp it and in a future expa
 #include "UDPSocket.h"
 #include "Buzzer.h"
 
+
 /*Initializing peripherals and sensors*/
 Serial pc(USBTX, USBRX);
 
+//this is the structure to hold the collected data and the time
+struct StructData{
+    StructTime timestamp;
+    float moisture;
+    float temperature;
+};
 
-/* End of Ticker related functions*/  
-
+StructData Data;
 float  moisture,temperature;    
-char datestr[20];
-const int payloadsize = 32;
+const int payloadsize = 30;
 char payload[payloadsize];
 bool WIFIConnected = false; //boolean that indicates if the connection to the wifi network is succesful.  
+
 int main()
 {
     /*Configure serial port and ticker*/
@@ -37,7 +43,6 @@ int main()
     ESP8266Interface esp(ESP8266_TX, ESP8266_RX); //create a wifi connection
     WiFiInterface *wifi = &esp; //create a wifi interface with the ESP8266
     UDPSocket socket;   
-
     
     alarm.beep(392,0.3); //send a tone to show its alive
 
@@ -65,7 +70,6 @@ int main()
         alarm.beep(392,0.3); //send a tone to indicate connection
         wait(0.5);
         alarm.beep(783.99,0.3); //send a tone to indicate connectio
-           
     }
 
     /*check DS1820 available*/
@@ -82,22 +86,39 @@ int main()
         /*Waits until SampleFlag from ticker is set to acquire date*/
         if(SampleFlag== true){  
             SampleFlag = false;
-            
-           /*Get sensors data*/
-            probe.startConversion();
-            moisture = Sensor.getMoisture();    
-            temperature = probe.read();
 
-            /*Get date in string*/
+            /*
+            START sensor data acquisition and time stamping
+            */ 
+            /*Get sensors data*/
+            probe.startConversion();
+            Data.moisture = Sensor.getMoisture();    
+            Data.temperature = probe.read();
+
+            /*Get date in timestamp structure*/
             if(!clk.ReadDate()){
-              clk.GetDatestr(datestr);
+              Data.timestamp = clk.GetDate();
             }
             else{
               pc.printf("RTC clock disconnected\r\n");
             }
+            /*
+            END of data acquisition and time stamping
+            */ 
 
-            //assemble data into a payload
-            sprintf(payload,"%s %1.2f %1.2f\n", datestr, moisture, temperature);
+            /*
+            START data transmission
+            */
+            //create payload to transmit
+            snprintf(payload,payloadsize,"%02d-%02d-%02d-%02d:%02d:%02d,%1.2f,%1.2f\r\n", 
+                                                            Data.timestamp.year,
+                                                            Data.timestamp.month,
+                                                            Data.timestamp.day,
+                                                            Data.timestamp.hour,
+                                                            Data.timestamp.mins,
+                                                            Data.timestamp.secs, 
+                                                            Data.moisture, 
+                                                            Data.temperature);
 
             /*Send data to terminal*/
             pc.printf(payload);
